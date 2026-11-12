@@ -1,0 +1,7 @@
+:root { font-family: "Segoe UI", "Malgun Gothic", sans-serif; color: #243640; }
+html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; background: transparent; user-select: none; }
+main { position: absolute; right: 32px; bottom: 24px; width: 340px; text-align: center; pointer-events: none; }
+#character { width: 120px; height: 120px; border: 0; border-radius: 50%; background: #a5e2cc; color: #243640; font-size: 32px; cursor: pointer; pointer-events: auto; }
+#character[data-state="Sleep"] { background: #b9c7d6; }
+#character:focus-visible { outline: 3px solid #287f68; outline-offset: -5px; }
+#status, .hint { margin: 8px 0 0; font-size: 12px; line-height: 1.5; text-shadow: 0 0 3px white, 0 0 5px white; }

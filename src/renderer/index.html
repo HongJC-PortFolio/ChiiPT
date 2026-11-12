@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; media-src 'self' blob:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+    <title>ChiiPT 개발 기반</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <main>
+      <button id="character" aria-label="임시 캐릭터. 우클릭으로 제어 메뉴 열기">●ᴗ●</button>
+      <p id="status" role="status"></p>
+      <p class="hint">임시 도형 · 인식 미구현<br>우클릭: 제어 메뉴 · 2초 누르기: 수면 · 더블클릭: 기상</p>
+    </main>
+    <script type="module" src="index.js"></script>
+  </body>
+</html>

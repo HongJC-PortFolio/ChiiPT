@@ -1,0 +1,22 @@
+{
+  "name": "chiipt",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "ChiiPT local desktop companion foundation",
+  "main": "dist/main/index.cjs",
+  "engines": { "node": ">=24.14.0 <25" },
+  "scripts": {
+    "dev": "npm run build && node scripts/run.mjs --dev",
+    "start": "npm run build && node scripts/run.mjs",
+    "typecheck": "tsc --noEmit",
+    "build": "npm run typecheck && node scripts/build.mjs",
+    "test": "node --experimental-strip-types --test tests/*.test.ts"
+  },
+  "devDependencies": {
+    "@types/node": "24.19.2",
+    "electron": "45.3.1",
+    "esbuild": "0.28.2",
+    "typescript": "7.0.2"
+  }
+}
