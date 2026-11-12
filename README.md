@@ -1,7 +1,4 @@
 # ChiiPT
-An interactive Windows desktop pet for posture awareness and stress relief.
-
-# ChiiPT
 
 **Interactive Windows Desktop Pet for Posture Awareness & Stress Relief**
 
