@@ -5,7 +5,9 @@
   "type": "module",
   "description": "ChiiPT local desktop companion foundation",
   "main": "dist/main/index.cjs",
-  "engines": { "node": ">=24.14.0 <25" },
+  "engines": {
+    "node": ">=24.14.0 <25"
+  },
   "scripts": {
     "dev": "npm run build && node scripts/run.mjs --dev",
     "start": "npm run build && node scripts/run.mjs",
@@ -18,5 +20,11 @@
     "electron": "45.3.1",
     "esbuild": "0.28.2",
     "typescript": "7.0.2"
+  },
+  "dependencies": {
+    "@mediapipe/tasks-vision": "1.2.3"
+  },
+  "allowScripts": {
+    "esbuild@0.28.2": true
   }
 }
