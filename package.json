@@ -13,7 +13,10 @@
     "start": "npm run build && node scripts/run.mjs",
     "typecheck": "tsc --noEmit",
     "build": "npm run typecheck && node scripts/build.mjs",
-    "test": "node --experimental-strip-types --test tests/*.test.ts"
+    "test": "node --experimental-strip-types --test tests/*.test.ts",
+    "animation": "npm run build && node scripts/run.mjs --animation",
+    "test:animation": "node scripts/animation-smoke.mjs",
+    "test:integration": "node scripts/integration-smoke.mjs"
   },
   "devDependencies": {
     "@types/node": "24.19.2",

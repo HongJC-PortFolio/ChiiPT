@@ -1,3 +1,4 @@
+import { CharacterRenderer } from './character/animation/CharacterRenderer.ts';
 import { CharacterController } from './character/CharacterController.ts';
 import { createPostureFeature } from './features/posture/index.ts';
 import { createHealingFeature } from './features/healing/index.ts';
@@ -8,11 +9,14 @@ import type { AppCommand, CameraDevice } from './shared/types/index.ts';
 const character = new CharacterController();
 const camera = new CameraManager(navigator.mediaDevices);
 const runtime = new AppRuntime(camera, character, [
-  createPostureFeature(result => character.updatePosture(result)),
+  createPostureFeature(result => { if (!animationMode) { character.updatePosture(result); render(); } }),
   createHealingFeature(result => character.updateHealing(result))
 ]);
 const pet = document.querySelector<HTMLButtonElement>('#character')!;
 const status = document.querySelector<HTMLParagraphElement>('#status')!;
+const animationMode = new URLSearchParams(location.search).has('animation');
+const renderer = new CharacterRenderer(pet, character);
+pet.setAttribute('aria-label', '치이카와 캐릭터. 우클릭으로 제어 메뉴 열기');
 let devices: CameraDevice[] = [];
 let deviceError = '';
 let interactive = false;
@@ -20,8 +24,7 @@ let pressTimer: ReturnType<typeof setTimeout> | undefined;
 
 function render(): void {
   pet.dataset.state = character.state;
-  pet.textContent = character.state === 'Sleep' ? '－ᴗ－' : '●ᴗ●';
-  status.textContent = `${character.state} · 카메라 ${camera.state.status}${camera.state.error ? ` · ${camera.state.error}` : ''}${deviceError ? ` · ${deviceError}` : ''}`;
+  status.textContent = `${character.state} · 자세 ${character.posture.state} · 카메라 ${camera.state.status}${camera.state.error ? ` · ${camera.state.error}` : ''}${deviceError ? ` · ${deviceError}` : ''}`;
   window.chiipt.publish({ character: character.state, camera: camera.state, selectedDeviceId: runtime.selectedDeviceId, devices });
 }
 async function refreshDevices(): Promise<void> {
@@ -46,17 +49,16 @@ function setInteractive(value: boolean): void {
   window.chiipt.setInteractive(value);
 }
 function cancelPress(): void { clearTimeout(pressTimer); pressTimer = undefined; }
-// Circular hit test excludes even the transparent corners of the button's box.
+// Match interactive pixels to the current animated silhouette.
 window.addEventListener('pointermove', event => {
-  const rect = pet.getBoundingClientRect();
-  const inside = Math.hypot(event.clientX - rect.left - rect.width / 2, event.clientY - rect.top - rect.height / 2) <= rect.width / 2;
+  const inside = renderer.hitTest(event.clientX, event.clientY);
   if (!inside) cancelPress();
   setInteractive(inside);
 });
 document.documentElement.addEventListener('pointerleave', () => { cancelPress(); setInteractive(false); });
 window.addEventListener('blur', () => { cancelPress(); setInteractive(false); });
 pet.addEventListener('pointerdown', event => {
-  if (event.button !== 0 || character.state !== 'Awake') return;
+  if (animationMode || event.button !== 0 || character.state !== 'Awake') return;
   cancelPress();
   pressTimer = setTimeout(() => void command({ type: 'sleep' }), 2000);
 });
@@ -65,7 +67,7 @@ window.addEventListener('pointercancel', cancelPress);
 pet.addEventListener('dblclick', () => void command({ type: 'wake' }));
 pet.addEventListener('contextmenu', event => { event.preventDefault(); cancelPress(); window.chiipt.showMenu(); });
 pet.addEventListener('keydown', event => {
-  if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); window.chiipt.showMenu(); }
+  if (!animationMode && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); window.chiipt.showMenu(); }
 });
 const unsubscribeCamera = camera.subscribe(() => render());
 const unsubscribeCommands = window.chiipt.onCommand(value => void command(value));
@@ -73,6 +75,32 @@ navigator.mediaDevices.addEventListener('devicechange', refreshDevices);
 window.addEventListener('beforeunload', () => {
   cancelPress(); unsubscribeCommands(); unsubscribeCamera();
   navigator.mediaDevices.removeEventListener('devicechange', refreshDevices);
+  renderer.dispose();
   runtime.dispose();
 });
+if (animationMode) {
+  document.body.classList.add('animation-test');
+  document.title = 'ChiiPT · 캐릭터 모션 테스트';
+  document.querySelector('.hint')!.textContent = '← / → 또는 A / D: 누르는 동안 기울기 · 키 놓기 / Space / Esc: 정상 복귀 · 1/2/3: 약/중/강 · 카메라 OFF';
+  let testIntensity = 1;
+  const keys = new Set<string>();
+  const directional = ['ArrowLeft', 'ArrowRight', 'KeyA', 'KeyD'];
+  const update = () => {
+    const left = keys.has('ArrowLeft') || keys.has('KeyA');
+    const right = keys.has('ArrowRight') || keys.has('KeyD');
+    character.updatePosture({ state: left === right ? 'neutral' : left ? 'left' : 'right', intensity: left === right ? 0 : testIntensity });
+  };
+  window.addEventListener('keydown', event => {
+    if (['Digit1', 'Digit2', 'Digit3'].includes(event.code)) { testIntensity = ({Digit1: .15, Digit2: .5, Digit3: 1} as Record<string, number>)[event.code]!; update(); return; }
+    if (event.code === 'Space' || event.code === 'Escape') { event.preventDefault(); keys.clear(); update(); }
+    else if (directional.includes(event.code)) { event.preventDefault(); keys.add(event.code); update(); }
+  });
+  window.addEventListener('keyup', event => {
+    if (directional.includes(event.code)) { event.preventDefault(); keys.delete(event.code); update(); }
+  });
+  window.addEventListener('blur', () => { keys.clear(); update(); });
+  document.addEventListener('visibilitychange', () => { if (document.hidden) { keys.clear(); update(); } });
+} else {
+  document.querySelector('.hint')!.textContent = '우클릭: 제어 메뉴 · 2초 누르기: 수면 · 더블클릭: 기상 · 랜드마크 인식 연결 / 좌우 기울기 계산 미연결';
+}
 void refreshDevices();

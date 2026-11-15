@@ -48,3 +48,10 @@ await Promise.all([
     { recursive: true }
   )
 ]);
+
+// Build after asset copying to avoid concurrent writes to the assets directory.
+await build({
+  entryPoints: ['src/renderer/features/posture/pose.worker.ts'],
+  outfile: 'dist/renderer/assets/pose.worker.js',
+  bundle: true, platform: 'browser', format: 'iife', target: 'es2022'
+});

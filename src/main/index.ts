@@ -4,7 +4,8 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import type { AppCommand, AppSnapshot } from '../renderer/shared/types/index.ts';
 
-const APP_URL = 'app://chiipt/index.html';
+const animationMode = process.argv.includes('--animation');
+const APP_URL = 'app://chiipt/index.html' + (animationMode ? '?animation=1' : '');
 const RENDERER_ROOT = path.resolve(__dirname, '../renderer');
 
 let window: BrowserWindow | null = null;
@@ -21,6 +22,7 @@ const FILES: Record<string, string> = {
   '.html': 'text/html; charset=utf-8',
   '.js': 'text/javascript; charset=utf-8',
   '.css': 'text/css; charset=utf-8',
+  '.png': 'image/png',
   '.wasm': 'application/wasm',
   '.task': 'application/octet-stream'
 };
@@ -76,7 +78,7 @@ function menu(): Menu {
 
   return Menu.buildFromTemplate([
     {
-      label: 'ChiiPT · 초기 공통 기반 (인식 미구현)',
+      label: 'ChiiPT · 자세 인식 · 캐릭터 렌더러 1차 통합',
       enabled: false
     },
     {
@@ -86,7 +88,7 @@ function menu(): Menu {
     { type: 'separator' },
     {
       label: '카메라 시작 / 재시도',
-      enabled: awake && snapshot.camera.status !== 'running' && snapshot.camera.status !== 'starting',
+      enabled: !animationMode && awake && snapshot.camera.status !== 'running' && snapshot.camera.status !== 'starting',
       click: () => send({ type: 'camera-start' })
     },
     {
@@ -203,7 +205,7 @@ app.whenReady().then(async () => {
 
   session.defaultSession.setPermissionCheckHandler(
     (contents, permission, _origin, details) =>
-      permission === 'media'
+      !animationMode && permission === 'media'
       && details.mediaType === 'video'
       && cameraAllowed
       && trusted(contents, contents?.getURL() ?? '')
@@ -212,7 +214,7 @@ app.whenReady().then(async () => {
   session.defaultSession.setPermissionRequestHandler(
     (contents, permission, callback, details) => {
       if (
-        !trusted(contents, details.requestingUrl)
+        animationMode || !trusted(contents, details.requestingUrl)
         || !details.isMainFrame
         || permission !== 'media'
         || !('mediaTypes' in details)
@@ -233,7 +235,7 @@ app.whenReady().then(async () => {
         type: 'question',
         title: 'ChiiPT 카메라 권한',
         message: '선택한 웹캠 사용을 허용하시겠습니까?',
-        detail: '영상은 저장하거나 전송하지 않습니다. 현재 단계에는 자세·손동작 인식이 없습니다.',
+        detail: '영상은 저장하거나 전송하지 않습니다. MediaPipe로 자세 랜드마크를 기기 안에서 처리합니다.',
         buttons: ['허용', '취소'],
         defaultId: 1,
         cancelId: 1
@@ -255,6 +257,7 @@ app.whenReady().then(async () => {
     hasShadow: false,
     show: false,
     backgroundColor: '#00000000',
+    ...(animationMode ? { frame: true, transparent: false, alwaysOnTop: false, resizable: true, movable: true, skipTaskbar: false, backgroundColor: '#f4f2eb' } : {}),
 
     webPreferences: {
       preload: path.join(__dirname, '../preload/index.cjs'),
@@ -264,11 +267,12 @@ app.whenReady().then(async () => {
       webSecurity: true,
       allowRunningInsecureContent: false,
       webviewTag: false,
+      backgroundThrottling: false,
       devTools: process.argv.includes('--dev')
     }
   });
 
-  window.setIgnoreMouseEvents(true, { forward: true });
+  window.setIgnoreMouseEvents(!animationMode, { forward: true });
 
   window.webContents.setWindowOpenHandler(() => ({
     action: 'deny'
@@ -291,15 +295,15 @@ app.whenReady().then(async () => {
   });
 
   window.once('ready-to-show', () => {
-    window?.showInactive();
+    if (animationMode) window?.show(); else window?.showInactive();
   });
 
   screen.on('display-metrics-changed', () => {
-    window?.setBounds(screen.getPrimaryDisplay().workArea);
+    if (!animationMode) window?.setBounds(screen.getPrimaryDisplay().workArea);
   });
 
   ipcMain.on('overlay:interactive', (event, interactive: unknown) => {
-    if (validSender(event) && typeof interactive === 'boolean') {
+    if (!animationMode && validSender(event) && typeof interactive === 'boolean') {
       window?.setIgnoreMouseEvents(!interactive, { forward: true });
     }
   });

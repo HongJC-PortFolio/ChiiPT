@@ -1,15 +1,29 @@
 
 import { Detector } from './detector.ts';
-import type { FeatureModule, PostureResult } from '../../shared/types/index.ts';
+import { ShoulderPosture } from './ShoulderPosture.ts';
+import type {
+  FeatureModule,
+  PostureResult
+} from '../../shared/types/index.ts';
 
-const WASM_ROOT = new URL('./assets/mediapipe/wasm', window.location.href).href;
-const MODEL_ASSET_PATH = new URL('./assets/models/pose_landmarker_lite.task', window.location.href).href;
+const WASM_ROOT = new URL(
+  './assets/mediapipe/wasm',
+  window.location.href
+).href;
+
+const MODEL_ASSET_PATH = new URL(
+  './assets/models/pose_landmarker_lite.task',
+  window.location.href
+).href;
 
 /** Creates the posture feature using the shared camera stream. */
-export function createPostureFeature(emit: (result: PostureResult) => void): FeatureModule {
+export function createPostureFeature(
+  emit: (result: PostureResult) => void
+): FeatureModule {
   let detector: Detector | null = null;
   let currentStream: MediaStream | null = null;
   let lastLogTime = 0;
+  const shoulders = new ShoulderPosture();
 
   return {
     id: 'posture',
@@ -21,6 +35,7 @@ export function createPostureFeature(emit: (result: PostureResult) => void): Fea
       detector = null;
       currentStream = stream;
       lastLogTime = 0;
+      shoulders.reset();
 
       console.log('[Posture] Detection started');
       console.log('[Posture] WASM path:', WASM_ROOT);
@@ -39,6 +54,8 @@ export function createPostureFeature(emit: (result: PostureResult) => void): Fea
           delegate: 'CPU',
 
           onResults: (frame) => {
+            const result = shoulders.update(frame);
+
             if (performance.now() - lastLogTime >= 1000) {
               lastLogTime = performance.now();
 
@@ -47,14 +64,12 @@ export function createPostureFeature(emit: (result: PostureResult) => void): Fea
                 hasUpperBody: frame.hasUpperBody,
                 landmarkCount: frame.landmarks.length,
                 imageWidth: frame.imageWidth,
-                imageHeight: frame.imageHeight
+                imageHeight: frame.imageHeight,
+                shoulderAngleDegrees: shoulders.angleDegrees,
+                state: result.state,
+                intensity: result.intensity
               });
             }
-
-            const result: PostureResult = {
-              state: frame.hasUpperBody ? 'neutral' : 'unavailable',
-              intensity: 0
-            };
 
             emit(result);
           },
@@ -75,9 +90,14 @@ export function createPostureFeature(emit: (result: PostureResult) => void): Fea
         detector = instance;
         instance.start(stream);
 
-        console.log('[Posture] Detector connected to camera stream');
+        console.log(
+          '[Posture] Detector connected to camera stream'
+        );
       } catch (error) {
-        console.error('[Posture] Initialization error:', error);
+        console.error(
+          '[Posture] Initialization error:',
+          error
+        );
 
         detector?.stop();
         detector = null;
@@ -96,6 +116,7 @@ export function createPostureFeature(emit: (result: PostureResult) => void): Fea
       detector = null;
       currentStream = null;
       lastLogTime = 0;
+      shoulders.reset();
 
       console.log('[Posture] Detection stopped');
     }
