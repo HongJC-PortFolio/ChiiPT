@@ -1,4 +1,5 @@
 import type { FeatureModule, HealingResult } from '../../shared/types/index.ts';
+import { PetReactions } from './PetReactions.ts';
 import { HandLandmarkerService, type DetectedHand } from './hand-landmarker.ts';
 
 const WASM_ROOT = new URL('../../assets/mediapipe/wasm', window.location.href).href;
@@ -15,7 +16,13 @@ const PETTING_STOP_TIMEOUT_MS = 400;
  * index-finger movement. Character placement is intentionally not part of
  * the initial gesture threshold, so interaction works without camera-to-screen calibration.
  */
-export function createHealingFeature(emit: (result: HealingResult) => void): FeatureModule {
+export function createHealingFeature(emitResult: (result: HealingResult) => void): FeatureModule {
+  // 쓰다듬기 연출(부비부비/웃음/총총). 인식 결과가 나갈 때 함께 알려 준다.
+  const reactions = new PetReactions();
+  const emit = (result: HealingResult): void => {
+    reactions.setPetting(result.state === 'petting');
+    emitResult(result);
+  };
   let detector: HandLandmarkerService | null = null;
   let video: HTMLVideoElement | null = null;
   let animationFrame: number | null = null;
@@ -128,6 +135,7 @@ export function createHealingFeature(emit: (result: HealingResult) => void): Fea
     start(stream: MediaStream): void {
       if (video?.srcObject === stream) return;
       this.stop();
+      reactions.attach();
       const currentGeneration = generation;
       const element = document.createElement('video');
       element.autoplay = true;
@@ -151,6 +159,7 @@ export function createHealingFeature(emit: (result: HealingResult) => void): Fea
       })();
     },
     stop(): void {
+      reactions.detach();
       generation++;
       if (animationFrame !== null) cancelAnimationFrame(animationFrame);
       animationFrame = null;
