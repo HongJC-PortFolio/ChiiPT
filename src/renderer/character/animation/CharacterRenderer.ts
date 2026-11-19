@@ -2,7 +2,7 @@ import { LeftRunSequence } from './LeftRunSequence.ts';
 import { prepareRunSprite } from './RunSprites.ts';
 import type { CharacterController } from '../CharacterController.ts';
 
-const height = 220, characterHeight = 150, floor = 205;
+const height = 1200, characterHeight = 150, floor = 1185, MAX_CHARACTER_SCALE = 6.0, SCALE_OVERLAY_THRESHOLD = 5.0;
 
 export class CharacterRenderer {
   readonly canvas = document.createElement('canvas');
@@ -20,6 +20,8 @@ export class CharacterRenderer {
   private useRightMotion = false;
   private disposed = false;
   private controller: CharacterController;
+  private characterScale = 1;
+  private scaleOverlay = new Image();
 
   constructor(host: HTMLElement, controller: CharacterController) {
     this.controller = controller;
@@ -30,6 +32,7 @@ export class CharacterRenderer {
     host.replaceChildren(this.canvas);
     this.runImages.forEach((image, i) => { image.src = new URL(`/assets/characters/${i < 8 ? 'left-run' : 'right-run'}/${i % 8 + 1}.png`, location.href).href; });
     this.idleImages.forEach((image, i) => { image.src = new URL(`/assets/characters/idle/idle-frame-${String(i + 1).padStart(2, '0')}.png`, location.href).href; });
+    this.scaleOverlay.src = new URL('/assets/characters/enlarge/enlarge.png', location.href).href;
     void Promise.all([...this.idleImages.map(image => image.decode()), ...this.runImages.map(image => image.decode())]).then(() => {
       if (this.disposed) return;
       this.runSprites = this.runImages.map(prepareRunSprite);
@@ -63,6 +66,16 @@ export class CharacterRenderer {
     }).catch(error => { if (!this.disposed) host.textContent = `캐릭터 이미지 로드 실패: ${String(error)}`; });
   }
 
+  /** Updates character scale based on camera distance. */
+  setScale(scale: number): void {
+    if (!Number.isFinite(scale)) return;
+
+    this.characterScale = Math.max(
+      0.65,
+      Math.min(MAX_CHARACTER_SCALE, scale ** 4)
+    );
+  }
+
   private draw = (now: number): void => {
     const dt = this.last ? Math.max(0, (now - this.last) / 1000) : 0;
     this.last = now;
@@ -90,30 +103,115 @@ export class CharacterRenderer {
     let blinkTime = this.idleTime, idleFrame = 0;
     while (idleFrame < 5 && blinkTime >= blinkDurations[idleFrame]!) { blinkTime -= blinkDurations[idleFrame]!; idleFrame++; }
     const ctx = this.context;
+    const showScaleOverlay = this.characterScale >= SCALE_OVERLAY_THRESHOLD && this.scaleOverlay.complete && this.scaleOverlay.naturalWidth > 0;
     ctx.setTransform(this.canvas.width / width, 0, 0, this.canvas.height / height, 0, 0);
     ctx.clearRect(0, 0, width, height);
     if (running.opacity < 1) {
-      ctx.save(); ctx.globalAlpha = 1 - running.opacity; ctx.translate(home + running.x, floor);
-      ctx.fillStyle = 'rgba(55,45,35,0.15)'; ctx.beginPath(); ctx.ellipse(0, 3, 46, 6, 0, 0, Math.PI * 2); ctx.fill();
-      const f = this.idleBounds, w = f.w * characterHeight / f.h;
-      ctx.drawImage(this.idleSprites[idleFrame]!, f.x, f.y, f.w, f.h, -w / 2, -characterHeight, w, characterHeight);
+      ctx.save();
+      ctx.globalAlpha = 1 - running.opacity;
+      ctx.translate(home + running.x, floor);
+
+      // Keep the shadow independent of character scaling.
+      ctx.fillStyle = 'rgba(55,45,35,0.15)';
+      ctx.beginPath();
+      ctx.ellipse(0, 3, 46, 6, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Scale the character while keeping its feet on the floor.
+      ctx.scale(this.characterScale, this.characterScale);
+
+      const f = this.idleBounds;
+      const w = f.w * characterHeight / f.h;
+
+      ctx.drawImage(
+        this.idleSprites[idleFrame]!,
+        f.x,
+        f.y,
+        f.w,
+        f.h,
+        -w / 2,
+        -characterHeight,
+        w,
+        characterHeight
+      );
+
+      if (showScaleOverlay) {
+        ctx.drawImage(
+          this.scaleOverlay,
+          -w / 2,
+          -characterHeight,
+          w,
+          characterHeight
+        );
+      }
+
       ctx.restore();
     }
-    if (running.opacity > 0) {
+        if (running.opacity > 0) {
       const scale = characterHeight / 158;
-      ctx.save(); ctx.globalAlpha = running.opacity;
-      const cos = Math.cos(running.rotation), sin = Math.sin(running.rotation);
-      const projected = this.runContours[spriteIndex]!.map(p => ({ x: p.x * cos - p.y * sin, y: p.x * sin + p.y * cos }));
+
+      ctx.save();
+      ctx.globalAlpha = running.opacity;
+
+      const cos = Math.cos(running.rotation);
+      const sin = Math.sin(running.rotation);
+
+      const projected = this.runContours[spriteIndex]!.map(p => ({
+        x: p.x * cos - p.y * sin,
+        y: p.x * sin + p.y * cos
+      }));
+
       const support = Math.max(...projected.map(p => p.y));
-      const minX = Math.min(...projected.map(p => p.x)), maxX = Math.max(...projected.map(p => p.x));
-      const center = Math.max(4 - minX, Math.min(width - 4 - maxX, home + running.x));
+      const minX = Math.min(...projected.map(p => p.x));
+      const maxX = Math.max(...projected.map(p => p.x));
+
+      // Account for character scaling when calculating screen boundaries.
+      const scaledMinX = minX * this.characterScale;
+      const scaledMaxX = maxX * this.characterScale;
+
+      const center = Math.max(
+        4 - scaledMinX,
+        Math.min(
+          width - 4 - scaledMaxX,
+          home + running.x
+        )
+      );
+
       ctx.translate(center, floor);
-      ctx.fillStyle = 'rgba(55,45,35,0.15)'; ctx.beginPath(); ctx.ellipse(0, 3, 46, 6, 0, 0, Math.PI * 2); ctx.fill();
-      // Rotate around the feet, then keep the lowest opaque foot pixel on the floor.
+
+      // Keep the shadow independent of character scaling.
+      ctx.fillStyle = 'rgba(55,45,35,0.15)';
+      ctx.beginPath();
+      ctx.ellipse(0, 3, 46, 6, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Apply character scaling before the existing rotation.
+      ctx.scale(this.characterScale, this.characterScale);
+
+      // Rotate around the feet and preserve the floor position.
       ctx.translate(0, -support);
       ctx.rotate(running.rotation);
+
       const sprite = this.runSprites[spriteIndex]!;
-      ctx.drawImage(sprite, -(spriteIndex < 8 ? 100 : 92) * scale, -188 * scale, sprite.width * scale, sprite.height * scale);
+
+      ctx.drawImage(
+        sprite,
+        -(spriteIndex < 8 ? 100 : 92) * scale,
+        -188 * scale,
+        sprite.width * scale,
+        sprite.height * scale
+      );
+
+      if (showScaleOverlay) {
+        ctx.drawImage(
+          this.scaleOverlay,
+          -(spriteIndex < 8 ? 100 : 92) * scale,
+          -188 * scale,
+          sprite.width * scale,
+          sprite.height * scale
+        );
+      }
+
       ctx.restore();
     }
     this.canvas.dataset.idleFrame = String(idleFrame);
@@ -129,6 +227,7 @@ export class CharacterRenderer {
     this.canvas.dataset.runAsset = spriteIndex < 8 ? 'left-run' : 'right-run';
     this.canvas.dataset.travelX = String(running.x);
     this.canvas.dataset.homeX = String(home);
+    this.canvas.dataset.characterScale = String(this.characterScale);
   };
 
   /** Match clicks to the currently rendered silhouette instead of the old circle. */

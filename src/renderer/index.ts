@@ -8,14 +8,15 @@ import type { AppCommand, CameraDevice } from './shared/types/index.ts';
 
 const character = new CharacterController();
 const camera = new CameraManager(navigator.mediaDevices);
-const runtime = new AppRuntime(camera, character, [
-  createPostureFeature(result => { if (!animationMode) { character.updatePosture(result); render(); } }),
-  createHealingFeature(result => character.updateHealing(result))
-]);
 const pet = document.querySelector<HTMLButtonElement>('#character')!;
 const status = document.querySelector<HTMLParagraphElement>('#status')!;
 const animationMode = new URLSearchParams(location.search).has('animation');
 const renderer = new CharacterRenderer(pet, character);
+const runtime = new AppRuntime(camera, character, [
+  createPostureFeature(result => { if (!animationMode) { character.updatePosture(result); render(); } },
+  scale => renderer.setScale(scale), ),
+  createHealingFeature(result => character.updateHealing(result))
+]);
 pet.setAttribute('aria-label', '치이카와 캐릭터. 우클릭으로 제어 메뉴 열기');
 let devices: CameraDevice[] = [];
 let deviceError = '';
