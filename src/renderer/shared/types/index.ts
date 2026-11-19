@@ -14,7 +14,8 @@ export interface FeatureModule {
 }
 export type AppCommand =
   | { type: 'camera-start' | 'camera-stop' | 'sleep' | 'wake' | 'refresh-devices' }
-  | { type: 'select-camera'; deviceId: string };
+  | { type: 'select-camera'; deviceId: string }
+  | { type: 'set-walk'; on: boolean };
 export interface AppSnapshot {
   character: CharacterState;
   camera: CameraState;

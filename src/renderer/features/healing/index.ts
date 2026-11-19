@@ -1,5 +1,6 @@
 import type { FeatureModule, HealingResult } from '../../shared/types/index.ts';
 import { PetReactions } from './PetReactions.ts';
+import { WalkFeature } from './walk/WalkFeature.ts';
 import { HandLandmarkerService, type DetectedHand } from './hand-landmarker.ts';
 
 const WASM_ROOT = new URL('../../assets/mediapipe/wasm', window.location.href).href;
@@ -19,6 +20,8 @@ const PETTING_STOP_TIMEOUT_MS = 400;
 export function createHealingFeature(emitResult: (result: HealingResult) => void): FeatureModule {
   // 쓰다듬기 연출(부비부비/웃음/총총). 인식 결과가 나갈 때 함께 알려 준다.
   const reactions = new PetReactions();
+  // 산책(마우스를 따라 걷기): 카메라와 상관없이 앱이 시작될 때 한 번 준비한다. 우클릭 메뉴의 '산책'으로 켜고 끈다.
+  new WalkFeature().attach();
   const emit = (result: HealingResult): void => {
     reactions.setPetting(result.state === 'petting');
     emitResult(result);

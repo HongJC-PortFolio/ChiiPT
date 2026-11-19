@@ -28,6 +28,8 @@ function isSnapshot(value: unknown): value is AppSnapshot {
     && v.devices.every(d => !!d && typeof d.deviceId === 'string' && d.deviceId.length <= 512 && typeof d.label === 'string' && d.label.length <= 200);
 }
 function send(command: AppCommand): void { window?.webContents.send('app:command', command); }
+let walkOn = false; // 우클릭 메뉴 '산책'의 체크 상태
+
 function menu(): Menu {
   const awake = snapshot.character === 'Awake';
   return Menu.buildFromTemplate([
@@ -47,6 +49,7 @@ function menu(): Menu {
     ] },
     { label: '수면', enabled: awake, click: () => send({ type: 'sleep' }) },
     { label: '기상', enabled: snapshot.character === 'Sleep', click: () => send({ type: 'wake' }) },
+    { label: '산책 (마우스 따라가기)', type: 'checkbox', checked: walkOn, enabled: awake, click: item => { walkOn = item.checked; send({ type: 'set-walk', on: item.checked }); } },
     ...(process.argv.includes('--dev') ? [{ label: '개발자 도구', click: () => window?.webContents.openDevTools({ mode: 'detach' }) }] : []),
     { type: 'separator' },
     { label: '종료', click: () => app.quit() }

@@ -99,6 +99,7 @@ export class PetReactions {
   private canReact(): boolean {
     const pet = this.pet;
     if (!pet || pet.dataset.state !== 'Awake') return false;
+    if (pet.dataset.walking === 'true') return false; // 산책 중에는 걷기가 우선
     return pet.querySelector<HTMLCanvasElement>('canvas')?.dataset.atHome !== 'false';
   }
 
