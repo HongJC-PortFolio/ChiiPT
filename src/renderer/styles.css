@@ -7,4 +7,9 @@ main { position: absolute; left: 50%; bottom: 24px; width: 256px; transform: tra
 #character[data-healing="petting"] { animation: pet-happy 450ms ease-in-out infinite alternate; }
 @keyframes pet-happy { from { transform: rotate(-5deg) scale(1); } to { transform: rotate(5deg) scale(1.06); } }
 #character:focus-visible { outline: 3px solid #287f68; outline-offset: -5px; }
+#camera-guide, #head-guide, #hand-cursor { position: fixed; display: none; box-sizing: border-box; pointer-events: none; }
+/* The guide geometry remains active for hit testing; only its debug outline is hidden. */
+#camera-guide { z-index: 10; visibility: hidden; border: 3px solid #f044ba; border-radius: 12px; box-shadow: 0 0 10px #f044ba80; }
+#head-guide { z-index: 11; visibility: hidden; border: 3px solid #22aeea; border-radius: 18px; box-shadow: 0 0 8px #22aeea80; }
+#hand-cursor { z-index: 12; width: auto; height: auto; font-size: 46px; line-height: 1; transform: translate(-50%, -50%); filter: drop-shadow(0 1px 2px #0008); }
 #status, .hint { margin: 8px 0 0; font-size: 12px; line-height: 1.5; text-shadow: 0 0 3px white, 0 0 5px white; }

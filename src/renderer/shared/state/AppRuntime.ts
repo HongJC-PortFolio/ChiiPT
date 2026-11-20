@@ -52,6 +52,6 @@ export class AppRuntime {
   dispose(): void {
     this.stopCamera();
     this.unsubscribe();
-    this.features.forEach(feature => feature.stop());
+    this.features.forEach(feature => { feature.stop(); feature.dispose?.(); });
   }
 }

@@ -1,5 +1,6 @@
 import type { FeatureModule, HealingResult } from '../../shared/types/index.ts';
 import { PetReactions } from './PetReactions.ts';
+import { PettingOverlay } from './PettingOverlay.ts';
 import { WalkFeature } from './walk/WalkFeature.ts';
 import { HandLandmarkerService, type DetectedHand } from './hand-landmarker.ts';
 
@@ -14,12 +15,13 @@ const PETTING_STOP_TIMEOUT_MS = 400;
 
 /**
  * Consumes the common camera stream and recognizes deliberate back-and-forth
- * index-finger movement. Character placement is intentionally not part of
- * the initial gesture threshold, so interaction works without camera-to-screen calibration.
+ * index-finger movement. A normalized camera point is mapped into the moving
+ * camera guide, and only the character's head guide can start a petting gesture.
  */
 export function createHealingFeature(emitResult: (result: HealingResult) => void): FeatureModule {
   // 쓰다듬기 연출(부비부비/웃음/총총). 인식 결과가 나갈 때 함께 알려 준다.
   const reactions = new PetReactions();
+  const overlay = new PettingOverlay();
   // 산책(마우스를 따라 걷기): 카메라와 상관없이 앱이 시작될 때 한 번 준비한다. 우클릭 메뉴의 '산책'으로 켜고 끈다.
   new WalkFeature().attach();
   const emit = (result: HealingResult): void => {
@@ -38,6 +40,7 @@ export function createHealingFeature(emitResult: (result: HealingResult) => void
   let lastMovementAt = 0;
   let petting = false;
   let reportedState: HealingResult['state'] = 'idle';
+  let lastHandPoint: { x: number; y: number } | null = null;
 
   const report = (state: HealingResult['state']): void => {
     if (reportedState === state) return;
@@ -51,30 +54,23 @@ export function createHealingFeature(emitResult: (result: HealingResult) => void
     emit({ state: 'error', message: message.slice(0, 160) });
   };
 
-  const resetGesture = (): void => {
+  const resetGesture = (state: HealingResult['state'] = 'idle'): void => {
     enteredAt = 0;
     strokeStartX = null;
     lastObservedX = null;
     firstStrokeDirection = 0;
     completedReverseStroke = false;
     lastMovementAt = 0;
-    report('idle');
     petting = false;
+    report(state);
   };
 
   const findHandPoint = (hands: DetectedHand[]): { x: number; y: number } | null => {
     for (const hand of hands) {
-      // Average the wrist, index tip, and middle-finger tip. This stays usable
-      // when one fingertip is briefly occluded during a natural petting motion.
-      const points = [hand.landmarks[0], hand.landmarks[8], hand.landmarks[12]].filter(
-        (point): point is { x: number; y: number; z: number } => point !== undefined
-      );
-      if (points.length > 0) {
-        return {
-          x: points.reduce((sum, point) => sum + point.x, 0) / points.length,
-          y: points.reduce((sum, point) => sum + point.y, 0) / points.length
-        };
-      }
+      // The index tip is the visible hand cursor and the contact point used for
+      // the head-only hit test. This makes the blue guide predictable to use.
+      const indexTip = hand.landmarks[8];
+      if (indexTip) return { x: indexTip.x, y: indexTip.y };
     }
     return null;
   };
@@ -83,11 +79,17 @@ export function createHealingFeature(emitResult: (result: HealingResult) => void
     if (currentGeneration !== generation || !detector || !video) return;
     const now = performance.now();
     const hands = detector.detect(video, now);
-    if (hands) {
-      const handPoint = findHandPoint(hands);
-      if (!handPoint) {
+    if (hands !== null) {
+      lastHandPoint = findHandPoint(hands);
+      const hit = overlay.update(lastHandPoint);
+      if (!lastHandPoint || !hit.inCameraGuide) {
         resetGesture();
+      } else if (!hit.inHeadGuide) {
+        // A hand outside the blue head guide remains visible but cannot carry
+        // over a partially completed stroke into the head area.
+        resetGesture('hand-detected');
       } else {
+        const handPoint = lastHandPoint;
         if (!enteredAt) {
           enteredAt = now;
           lastMovementAt = now;
@@ -128,7 +130,10 @@ export function createHealingFeature(emitResult: (result: HealingResult) => void
           report('petting');
         }
       }
-      if (!handPoint && hands.length > 0) report('hand-detected');
+    } else {
+      // Render at display refresh rate so the guides follow walking and reaction
+      // transforms even when the next camera frame has not arrived yet.
+      overlay.update(lastHandPoint);
     }
     animationFrame = requestAnimationFrame(() => processFrame(currentGeneration));
   };
@@ -148,6 +153,10 @@ export function createHealingFeature(emitResult: (result: HealingResult) => void
       Object.assign(element.style, { position: 'fixed', width: '1px', height: '1px', opacity: '0', pointerEvents: 'none' });
       document.body.append(element);
       video = element;
+      lastHandPoint = null;
+      // Show the temporary pink/blue calibration guides as soon as the camera
+      // feature starts, rather than waiting for the model to finish loading.
+      overlay.update(null);
       detector = new HandLandmarkerService(WASM_ROOT, MODEL_ASSET_PATH);
       reportedState = 'idle';
       void (async () => {
@@ -167,6 +176,8 @@ export function createHealingFeature(emitResult: (result: HealingResult) => void
       if (animationFrame !== null) cancelAnimationFrame(animationFrame);
       animationFrame = null;
       resetGesture();
+      lastHandPoint = null;
+      overlay.hide();
       detector?.close();
       detector = null;
       if (video) {
@@ -175,6 +186,9 @@ export function createHealingFeature(emitResult: (result: HealingResult) => void
         video.remove();
         video = null;
       }
+    },
+    dispose(): void {
+      overlay.destroy();
     }
   };
 }

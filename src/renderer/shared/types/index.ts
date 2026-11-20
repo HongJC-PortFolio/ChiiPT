@@ -11,6 +11,7 @@ export interface FeatureModule {
   readonly id: 'posture' | 'healing';
   start(stream: MediaStream): void;
   stop(): void;
+  dispose?(): void;
 }
 export type AppCommand =
   | { type: 'camera-start' | 'camera-stop' | 'sleep' | 'wake' | 'refresh-devices' }
