@@ -1,7 +1,8 @@
 ﻿export const leftRunSettings = {
   mediumAfterSeconds: 10,
   strongAfterSeconds: 20,
-  fps: [6, 14, 30],
+  fps: [12, 20, 30],
+  frameCount: 14,
   edgeTravelSeconds: 30,
   recognitionLossSeconds: 1,
   angles: [3, 8, 15], // degrees clockwise: lean right while moving left
@@ -50,7 +51,7 @@ export class LeftRunSequence {
       this.rotation += (targetAngle - this.rotation) * blend;
       this.velocity = direction * distance / leftRunSettings.edgeTravelSeconds;
       this.x = Math.max(-distance, Math.min(distance, this.x + this.velocity * dt));
-      this.phase = (this.phase + this.fps * dt) % 8;
+      this.phase = (this.phase + this.fps * dt) % leftRunSettings.frameCount;
       this.opacity = Math.min(1, this.opacity + dt / .15);
     } else if (state === 'neutral') {
       if (this.x !== 0) {
@@ -58,7 +59,7 @@ export class LeftRunSequence {
         const homeDirection = -Math.sign(this.x);
         this.velocity = homeDirection * leftRunSettings.returnSpeed;
         this.rotation = homeDirection * 8 * Math.PI / 180;
-        this.phase = (this.phase + this.fps * dt) % 8;
+        this.phase = (this.phase + this.fps * dt) % leftRunSettings.frameCount;
         this.x += homeDirection * Math.min(Math.abs(this.x), leftRunSettings.returnSpeed * dt);
         this.opacity = 1;
       }

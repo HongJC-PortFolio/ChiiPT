@@ -1,7 +1,7 @@
 import type { PostureResult } from '../../shared/types/index.ts';
 
 export const shoulderSettings = {
-  enterDegrees: 3,
+  enterDegrees: 2,
   exitDegrees: 1,
   maximumDegrees: 10,
   minConfidence: .2,

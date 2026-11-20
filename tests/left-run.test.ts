@@ -8,10 +8,10 @@ function advance(s: LeftRunSequence, seconds: number, state: 'left'|'right'|'neu
   for (let i=0;i<count;i++) result = s.update(seconds/count, state, intensity, distance);
   return result;
 }
-test('time tiers smooth to 6/14/30 FPS and 3/8/15 degrees independently of intensity', () => {
+test('time tiers smooth to 12/20/30 FPS and 3/8/15 degrees independently of intensity', () => {
   for (const intensity of [0, 1]) {
     const s = new LeftRunSequence();
-    for (const [seconds, fps, angle] of [[leftRunSettings.mediumAfterSeconds - 1,6,3],[leftRunSettings.strongAfterSeconds - leftRunSettings.mediumAfterSeconds,14,8],[5,30,15]]) {
+    for (const [seconds, fps, angle] of [[leftRunSettings.mediumAfterSeconds - 1,12,3],[leftRunSettings.strongAfterSeconds - leftRunSettings.mediumAfterSeconds,20,8],[5,30,15]]) {
       const r = advance(s,seconds!,'left',600,intensity);
       assert.ok(Math.abs(r.fps-fps!) < .001);
       assert.ok(Math.abs(r.rotation*180/Math.PI-angle!) < .001);
@@ -26,7 +26,7 @@ test('both directions take 30 seconds at different widths; feet keep looping at 
     assert.ok(Math.abs(advance(s,15,state,distance).x-sign*distance)<1e-7);
     const frames = new Set<number>();
     for(let i=0;i<100;i++) frames.add(s.update(.01,state,1,distance).index);
-    assert.equal(frames.size,8); assert.equal(s.x,sign*distance);
+    assert.equal(frames.size,leftRunSettings.frameCount); assert.equal(s.x,sign*distance);
     assert.equal(s.update(0,state,1,distance/2).x,sign*distance/2);
   }
 });
@@ -57,5 +57,23 @@ test('real dt gives consistent position and hold time across frame rates', () =>
     for(let i=0;i<hz*12;i++) r=s.update(1/hz,'right',0,600);
     assert.ok(Math.abs(r.x-240)<1e-7); assert.ok(Math.abs(r.heldSeconds-12)<1e-7);
     assert.equal(r.tier,12 < leftRunSettings.mediumAfterSeconds ? 0 : 12 < leftRunSettings.strongAfterSeconds ? 1 : 2);
+  }
+});
+
+test('each time tier plays all 14 PNG frames in order in both directions', () => {
+  for (const state of ['left', 'right'] as const) {
+    for (const elapsed of [1, 12, 22]) {
+      const s = new LeftRunSequence();
+      advance(s, elapsed, state);
+      let previous = s.update(0, state, 0, 600).index;
+      const seen = new Set([previous]);
+      for (let i = 0; i < 120; i++) {
+        const current = s.update(1 / 60, state, 0, 600).index;
+        assert.ok(current === previous || current === (previous + 1) % leftRunSettings.frameCount);
+        seen.add(current);
+        previous = current;
+      }
+      assert.equal(seen.size, leftRunSettings.frameCount);
+    }
   }
 });

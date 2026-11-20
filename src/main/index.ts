@@ -12,6 +12,7 @@ let window: BrowserWindow | null = null;
 let tray: Tray | null = null;
 
 let snapshot: AppSnapshot = {
+  mode: 'posture',
   character: 'Awake',
   camera: { status: 'stopped', error: null },
   selectedDeviceId: '',
@@ -53,6 +54,8 @@ function isSnapshot(value: unknown): value is AppSnapshot {
   const v = value as AppSnapshot;
 
   return ['Awake', 'FallingAsleep', 'Sleep', 'WakingUp'].includes(v.character)
+    && ['posture', 'healing', 'off'].includes(v.mode)
+    && (v.walkOn === undefined || typeof v.walkOn === 'boolean')
     && !!v.camera
     && ['stopped', 'starting', 'running', 'error'].includes(v.camera.status)
     && (v.camera.error === null || (typeof v.camera.error === 'string' && v.camera.error.length <= 500))
@@ -78,7 +81,7 @@ function menu(): Menu {
 
   return Menu.buildFromTemplate([
     {
-      label: 'ChiiPT · 자세 인식 · 캐릭터 렌더러 1차 통합',
+      label: 'ChiiPT · 자세 / 힐링 모드',
       enabled: false
     },
     {
@@ -86,9 +89,16 @@ function menu(): Menu {
       enabled: false
     },
     { type: 'separator' },
+    { label: '기능 선택', enabled: !animationMode, submenu: [
+      { label: '자세 모드', type: 'radio', checked: snapshot.mode === 'posture', click: () => send({ type: 'select-mode', mode: 'posture' }) },
+      { label: '힐링 모드', type: 'radio', checked: snapshot.mode === 'healing', click: () => send({ type: 'select-mode', mode: 'healing' }) },
+      { label: '모두 끄기', type: 'radio', checked: snapshot.mode === 'off', click: () => send({ type: 'select-mode', mode: 'off' }) }
+    ] },
+    { label: '산책 (마우스 따라가기)', type: 'checkbox', checked: snapshot.walkOn === true, enabled: awake && snapshot.mode === 'healing', click: item => send({ type: 'set-walk', on: item.checked }) },
+    { label: '지금 스트레칭', enabled: awake, click: () => send({ type: 'stretch' }) },
     {
       label: '카메라 시작 / 재시도',
-      enabled: !animationMode && awake && snapshot.camera.status !== 'running' && snapshot.camera.status !== 'starting',
+      enabled: !animationMode && snapshot.mode !== 'off' && awake && snapshot.camera.status !== 'running' && snapshot.camera.status !== 'starting',
       click: () => send({ type: 'camera-start' })
     },
     {
@@ -235,7 +245,7 @@ app.whenReady().then(async () => {
         type: 'question',
         title: 'ChiiPT 카메라 권한',
         message: '선택한 웹캠 사용을 허용하시겠습니까?',
-        detail: '영상은 저장하거나 전송하지 않습니다. MediaPipe로 자세 랜드마크를 기기 안에서 처리합니다.',
+        detail: '영상은 저장하거나 전송하지 않습니다. MediaPipe로 선택한 기능의 랜드마크를 기기 안에서 처리합니다.',
         buttons: ['허용', '취소'],
         defaultId: 1,
         cancelId: 1

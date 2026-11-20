@@ -87,7 +87,7 @@ test('device disconnection releases tracks and marks an error', async () => {
   assert.equal(input.stops(), 1);
 });
 
-test('features receive the identical stream; sleep releases it and wake respects explicit stop', async () => {
+test('only selected feature receives stream; sleep releases it and wake respects explicit stop', async () => {
   const streams = [fakeStream(), fakeStream()];
   let requests = 0;
   const camera = new CameraManager({ getUserMedia: async () => streams[requests++].stream, enumerateDevices: async () => [] });
@@ -98,7 +98,7 @@ test('features receive the identical stream; sleep releases it and wake respects
   const character = new CharacterController();
   const runtime = new AppRuntime(camera, character, [feature('posture'), feature('healing')]);
   await runtime.startCamera();
-  assert.equal(received.get('posture'), received.get('healing'));
+  assert.equal(received.has('healing'), false);
   assert.equal(received.get('posture'), streams[0].stream);
   runtime.sleep();
   assert.equal(character.state, 'Sleep');

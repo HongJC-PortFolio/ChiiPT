@@ -8,14 +8,15 @@ import type { AppCommand, CameraDevice } from './shared/types/index.ts';
 
 const character = new CharacterController();
 const camera = new CameraManager(navigator.mediaDevices);
-const runtime = new AppRuntime(camera, character, [
-  createPostureFeature(result => { if (!animationMode) { character.updatePosture(result); render(); } }),
-  createHealingFeature(result => character.updateHealing(result))
-]);
 const pet = document.querySelector<HTMLButtonElement>('#character')!;
 const status = document.querySelector<HTMLParagraphElement>('#status')!;
 const animationMode = new URLSearchParams(location.search).has('animation');
 const renderer = new CharacterRenderer(pet, character);
+const runtime = new AppRuntime(camera, character, [
+  createPostureFeature(result => { if (!animationMode && runtime.mode === 'posture') { character.updatePosture(result); render(); } },
+    scale => renderer.setScale(!animationMode && runtime.mode === 'posture' ? scale : 1)),
+  createHealingFeature(result => { if (runtime.mode === 'healing') { character.updateHealing(result); render(); } })
+], async signal => { render(); await renderer.playWake(signal); });
 pet.setAttribute('aria-label', '치이카와 캐릭터. 우클릭으로 제어 메뉴 열기');
 let devices: CameraDevice[] = [];
 let deviceError = '';
@@ -24,8 +25,11 @@ let pressTimer: ReturnType<typeof setTimeout> | undefined;
 
 function render(): void {
   pet.dataset.state = character.state;
-  status.textContent = `${character.state} · 자세 ${character.posture.state} · 카메라 ${camera.state.status}${camera.state.error ? ` · ${camera.state.error}` : ''}${deviceError ? ` · ${deviceError}` : ''}`;
-  window.chiipt.publish({ character: character.state, camera: camera.state, selectedDeviceId: runtime.selectedDeviceId, devices });
+  pet.dataset.mode = runtime.mode;
+  pet.dataset.healing = character.healing.state;
+  if(runtime.mode!=='healing'||character.state!=='Awake')renderer.setWalking(false);
+  status.textContent = `${character.state} · 모드 ${runtime.mode} · 힐링 ${character.healing.state}${character.healing.message ? ` (${character.healing.message})` : ''} · 자세 ${character.posture.state} · 카메라 ${camera.state.status}${camera.state.error ? ` · ${camera.state.error}` : ''}${deviceError ? ` · ${deviceError}` : ''}`;
+  window.chiipt.publish({ walkOn: renderer.walkingEnabled, mode: runtime.mode, character: character.state, camera: camera.state, selectedDeviceId: runtime.selectedDeviceId, devices });
 }
 async function refreshDevices(): Promise<void> {
   try { devices = await camera.devices(); deviceError = ''; }
@@ -34,8 +38,11 @@ async function refreshDevices(): Promise<void> {
 }
 async function command(command: AppCommand): Promise<void> {
   switch (command.type) {
+    case 'select-mode': if (!animationMode) await runtime.selectMode(command.mode); break;
     case 'camera-start': await runtime.startCamera(); await refreshDevices(); break;
     case 'camera-stop': runtime.stopCamera(); break;
+    case 'set-walk': renderer.setWalking(command.on); break;
+    case 'stretch': renderer.playStretch(); break;
     case 'sleep': runtime.sleep(); break;
     case 'wake': await runtime.wake(); await refreshDevices(); break;
     case 'refresh-devices': await refreshDevices(); break;
@@ -101,6 +108,6 @@ if (animationMode) {
   window.addEventListener('blur', () => { keys.clear(); update(); });
   document.addEventListener('visibilitychange', () => { if (document.hidden) { keys.clear(); update(); } });
 } else {
-  document.querySelector('.hint')!.textContent = '우클릭: 제어 메뉴 · 2초 누르기: 수면 · 더블클릭: 기상 · 랜드마크 인식 연결 / 좌우 기울기 계산 미연결';
+  document.querySelector('.hint')!.textContent = '우클릭: 제어 메뉴 · 2초 누르기: 수면 · 더블클릭: 기상 · 기능 선택: 자세 / 힐링 / 모두 끄기';
 }
 void refreshDevices();

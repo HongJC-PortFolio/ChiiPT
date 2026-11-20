@@ -49,6 +49,9 @@ await Promise.all([
   )
 ]);
 
+// Keep the WASM runtime aligned with the installed Tasks Vision package (healing fix).
+await cp('node_modules/@mediapipe/tasks-vision/wasm', 'dist/renderer/assets/mediapipe/wasm', { recursive: true });
+
 // Build after asset copying to avoid concurrent writes to the assets directory.
 await build({
   entryPoints: ['src/renderer/features/posture/pose.worker.ts'],

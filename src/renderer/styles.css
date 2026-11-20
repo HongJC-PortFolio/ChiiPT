@@ -9,8 +9,16 @@ main { position: absolute; right: 0; bottom: 0; width: 100%; text-align: center;
 /* Supplied transparent sprites replace the temporary circle. */
 #character { width: 100%; height: 220px; padding: 0; background: transparent; border-radius: 0; display: block; }
 #character canvas { width: 100%; height: 220px; display: block; }
-#character[data-state="Sleep"] { background: transparent; filter: brightness(.9); }
+#character[data-state="Sleep"] { background: transparent;  }
 body.animation-test { background: #f4f2eb; }
 
 #status, .hint { position: fixed; right: 16px; top: 8px; max-width: calc(100vw - 32px); }
 .hint { top: 34px; }
+
+.hint{display:none;}
+#status, .hint{display:none;}
+#camera-guide, #head-guide, #hand-cursor { position: fixed; display: none; box-sizing: border-box; pointer-events: none; }
+/* The guide geometry remains active for hit testing; only its debug outline is hidden. */
+#camera-guide { z-index: 10; visibility: hidden; border: 3px solid #f044ba; border-radius: 12px; box-shadow: 0 0 10px #f044ba80; }
+#head-guide { z-index: 11; visibility: hidden; border: 3px solid #22aeea; border-radius: 18px; box-shadow: 0 0 8px #22aeea80; }
+#hand-cursor { z-index: 12; width: auto; height: auto; font-size: 46px; line-height: 1; transform: translate(-50%, -50%); filter: drop-shadow(0 1px 2px #0008); }

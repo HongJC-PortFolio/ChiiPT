@@ -1,6 +1,7 @@
 
 import { Detector } from './detector.ts';
 import { ShoulderPosture } from './ShoulderPosture.ts';
+import { FowardHeadPosture } from './forwardHeadPosture.ts';
 import type {
   FeatureModule,
   PostureResult
@@ -18,12 +19,22 @@ const MODEL_ASSET_PATH = new URL(
 
 /** Creates the posture feature using the shared camera stream. */
 export function createPostureFeature(
-  emit: (result: PostureResult) => void
+  emit: (result: PostureResult) => void,
+  onScale?: (scale: number) => void
 ): FeatureModule {
   let detector: Detector | null = null;
   let currentStream: MediaStream | null = null;
   let lastLogTime = 0;
+
   const shoulders = new ShoulderPosture();
+
+  const forwardHeadPosture = new FowardHeadPosture({
+    minScale: 0.65,
+    maxScale: 2,
+    minLandmarkConfidence: 0.2,
+    calibrationFrames: 12,
+    smoothingMs: 180
+  });
 
   return {
     id: 'posture',
@@ -35,7 +46,10 @@ export function createPostureFeature(
       detector = null;
       currentStream = stream;
       lastLogTime = 0;
+
       shoulders.reset();
+      forwardHeadPosture.reset();
+      onScale?.(1);
 
       console.log('[Posture] Detection started');
       console.log('[Posture] WASM path:', WASM_ROOT);
@@ -55,6 +69,9 @@ export function createPostureFeature(
 
           onResults: (frame) => {
             const result = shoulders.update(frame);
+            const scale = forwardHeadPosture.update(frame);
+
+            onScale?.(scale);
 
             if (performance.now() - lastLogTime >= 1000) {
               lastLogTime = performance.now();
@@ -67,7 +84,8 @@ export function createPostureFeature(
                 imageHeight: frame.imageHeight,
                 shoulderAngleDegrees: shoulders.angleDegrees,
                 state: result.state,
-                intensity: result.intensity
+                intensity: result.intensity,
+                characterScale: scale
               });
             }
 
@@ -79,6 +97,10 @@ export function createPostureFeature(
 
             detector = null;
             currentStream = null;
+
+            shoulders.reset();
+            forwardHeadPosture.reset();
+            onScale?.(1);
 
             emit({
               state: 'unavailable',
@@ -103,6 +125,10 @@ export function createPostureFeature(
         detector = null;
         currentStream = null;
 
+        shoulders.reset();
+        forwardHeadPosture.reset();
+        onScale?.(1);
+
         emit({
           state: 'unavailable',
           intensity: 0
@@ -116,7 +142,10 @@ export function createPostureFeature(
       detector = null;
       currentStream = null;
       lastLogTime = 0;
+
       shoulders.reset();
+      forwardHeadPosture.reset();
+      onScale?.(1);
 
       console.log('[Posture] Detection stopped');
     }

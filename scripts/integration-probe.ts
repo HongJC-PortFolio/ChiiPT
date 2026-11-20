@@ -1,6 +1,9 @@
 import { Detector } from '../src/renderer/features/posture/detector.ts';
 
 export async function runProbe() {
+  const originalRaf=window.requestAnimationFrame, originalCancel=window.cancelAnimationFrame;
+  window.requestAnimationFrame=callback=>window.setTimeout(()=>callback(performance.now()),16);
+  window.cancelAnimationFrame=id=>window.clearTimeout(id);
   const canvas = document.createElement('canvas');
   canvas.width = 320; canvas.height = 240;
   const ctx = canvas.getContext('2d')!;
@@ -40,6 +43,6 @@ export async function runProbe() {
     });
   } finally {
     clearTimeout(timeout!); clearInterval(timer); detector!?.stop();
-    stream.getTracks().forEach(track => track.stop());
+    stream.getTracks().forEach(track => track.stop()); window.requestAnimationFrame=originalRaf;window.cancelAnimationFrame=originalCancel;
   }
 }
