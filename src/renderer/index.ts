@@ -9,7 +9,10 @@ const character = new CharacterController();
 const camera = new CameraManager(navigator.mediaDevices);
 const runtime = new AppRuntime(camera, character, [
   createPostureFeature(result => character.updatePosture(result)),
-  createHealingFeature(result => character.updateHealing(result))
+  createHealingFeature(result => {
+    character.updateHealing(result);
+    render();
+  })
 ]);
 const pet = document.querySelector<HTMLButtonElement>('#character')!;
 const status = document.querySelector<HTMLParagraphElement>('#status')!;
@@ -18,10 +21,20 @@ let deviceError = '';
 let interactive = false;
 let pressTimer: ReturnType<typeof setTimeout> | undefined;
 
+function healingStatus(): string {
+  switch (character.healing.state) {
+    case 'hand-detected': return '손 감지됨';
+    case 'petting': return '쓰다듬기 감지!';
+    case 'error': return `손동작 인식 오류: ${character.healing.message ?? '초기화 실패'}`;
+    default: return '손동작 대기 중';
+  }
+}
+
 function render(): void {
   pet.dataset.state = character.state;
+  pet.dataset.healing = character.healing.state;
   pet.textContent = character.state === 'Sleep' ? '－ᴗ－' : '●ᴗ●';
-  status.textContent = `${character.state} · 카메라 ${camera.state.status}${camera.state.error ? ` · ${camera.state.error}` : ''}${deviceError ? ` · ${deviceError}` : ''}`;
+  status.textContent = `${character.state} · 카메라 ${camera.state.status} · ${healingStatus()}${camera.state.error ? ` · ${camera.state.error}` : ''}${deviceError ? ` · ${deviceError}` : ''}`;
   window.chiipt.publish({ character: character.state, camera: camera.state, selectedDeviceId: runtime.selectedDeviceId, devices });
 }
 async function refreshDevices(): Promise<void> {

@@ -56,12 +56,19 @@ function menu(): Menu {
 app.whenReady().then(async () => {
   // Only these built artifacts are served; arbitrary local files are inaccessible.
   const files: Record<string, string> = { '/index.html': 'text/html; charset=utf-8', '/index.js': 'text/javascript', '/styles.css': 'text/css' };
+  const assetMime: Record<string, string> = {
+    '.js': 'text/javascript', '.wasm': 'application/wasm', '.task': 'application/octet-stream', '.png': 'image/png'
+  };
   protocol.handle('app', async request => {
     const url = new URL(request.url);
-    const mime = files[url.pathname];
+    const assetRequest = url.pathname.startsWith('/assets/');
+    const mime = files[url.pathname] ?? (assetRequest ? assetMime[path.extname(url.pathname).toLowerCase()] : undefined);
     if (url.host !== 'chiipt' || !mime || request.method !== 'GET') return new Response('', { status: 404 });
+    const rendererRoot = path.resolve(__dirname, '../renderer');
+    const filePath = path.resolve(rendererRoot, url.pathname.slice(1));
+    if (filePath !== rendererRoot && !filePath.startsWith(`${rendererRoot}${path.sep}`)) return new Response('', { status: 404 });
     try {
-      const content = await readFile(path.join(__dirname, '../renderer', url.pathname.slice(1)));
+      const content = await readFile(filePath);
       return new Response(content, { headers: { 'Content-Type': mime, 'X-Content-Type-Options': 'nosniff' } });
     } catch { return new Response('', { status: 404 }); }
   });
