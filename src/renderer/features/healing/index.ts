@@ -1,8 +1,10 @@
 import type { FeatureModule, HealingResult } from '../../shared/types/index.ts';
 import { PetReactions } from './PetReactions.ts';
 import { PettingOverlay } from './PettingOverlay.ts';
+import { CheekPinchReaction } from './CheekPinchReaction.ts';
 import { WalkFeature } from './walk/WalkFeature.ts';
 import { HandLandmarkerService, type DetectedHand } from './hand-landmarker.ts';
+import { recognizeSidewaysPinch } from './pinch-recognition.ts';
 
 const WASM_ROOT = new URL('../../assets/mediapipe/wasm', window.location.href).href;
 const MODEL_ASSET_PATH = new URL('../../assets/models/hand_landmarker.task', window.location.href).href;
@@ -12,6 +14,7 @@ const PETTING_MIN_DURATION_MS = 120;
 const STROKE_MIN_DISTANCE = 0.03;
 const MOVEMENT_NOISE_THRESHOLD = 0.004;
 const PETTING_STOP_TIMEOUT_MS = 400;
+const PINCH_MIN_DURATION_MS = 80;
 
 /**
  * Consumes the common camera stream and recognizes deliberate back-and-forth
@@ -21,12 +24,14 @@ const PETTING_STOP_TIMEOUT_MS = 400;
 export function createHealingFeature(emitResult: (result: HealingResult) => void): FeatureModule {
   // 쓰다듬기 연출(부비부비/웃음/총총). 인식 결과가 나갈 때 함께 알려 준다.
   const reactions = new PetReactions();
+  const cheekPinch = new CheekPinchReaction();
   const overlay = new PettingOverlay();
   // 산책(마우스를 따라 걷기): 카메라와 상관없이 앱이 시작될 때 한 번 준비한다. 우클릭 메뉴의 '산책'으로 켜고 끈다.
   new WalkFeature().attach();
   const emit = (result: HealingResult): void => {
-    reactions.setPetting(result.state === 'petting');
     emitResult(result);
+    reactions.setPetting(result.state === 'petting');
+    cheekPinch.setPinching(result.state === 'pinching', lastPinchWasLeft);
   };
   let detector: HandLandmarkerService | null = null;
   let video: HTMLVideoElement | null = null;
@@ -39,6 +44,9 @@ export function createHealingFeature(emitResult: (result: HealingResult) => void
   let completedReverseStroke = false;
   let lastMovementAt = 0;
   let petting = false;
+  let pinching = false;
+  let pinchEnteredAt = 0;
+  let lastPinchWasLeft = false;
   let reportedState: HealingResult['state'] = 'idle';
   let lastHandPoint: { x: number; y: number } | null = null;
 
@@ -62,15 +70,21 @@ export function createHealingFeature(emitResult: (result: HealingResult) => void
     completedReverseStroke = false;
     lastMovementAt = 0;
     petting = false;
+    pinching = false;
+    pinchEnteredAt = 0;
     report(state);
   };
 
-  const findHandPoint = (hands: DetectedHand[]): { x: number; y: number } | null => {
+  const findHandPoint = (hands: DetectedHand[]): { point: { x: number; y: number }; pinching: boolean; leftHand: boolean; handedness: DetectedHand['handedness'] } | null => {
+    for (const hand of hands) {
+      const pinch = recognizeSidewaysPinch(hand.landmarks);
+      if (pinch) return { point: pinch.point, pinching: true, leftHand: hand.handedness === 'Left', handedness: hand.handedness };
+    }
     for (const hand of hands) {
       // The index tip is the visible hand cursor and the contact point used for
       // the head-only hit test. This makes the blue guide predictable to use.
       const indexTip = hand.landmarks[8];
-      if (indexTip) return { x: indexTip.x, y: indexTip.y };
+      if (indexTip) return { point: { x: indexTip.x, y: indexTip.y }, pinching: false, leftHand: hand.handedness === 'Left', handedness: hand.handedness };
     }
     return null;
   };
@@ -80,16 +94,59 @@ export function createHealingFeature(emitResult: (result: HealingResult) => void
     const now = performance.now();
     const hands = detector.detect(video, now);
     if (hands !== null) {
-      lastHandPoint = findHandPoint(hands);
-      const hit = overlay.update(lastHandPoint);
+      const interaction = findHandPoint(hands);
+      lastHandPoint = interaction?.point ?? null;
+      const hit = overlay.update(lastHandPoint, interaction?.pinching, interaction?.leftHand);
       if (!lastHandPoint || !hit.inCameraGuide) {
         resetGesture();
+      } else if (interaction?.pinching) {
+        // A closed pinch must stay in the dedicated green cheek area. Never
+        // pass it to the stroke recognizer, even when it is outside the box.
+        enteredAt = 0;
+        strokeStartX = null;
+        lastObservedX = null;
+        firstStrokeDirection = 0;
+        completedReverseStroke = false;
+        lastMovementAt = now;
+        const inAssignedPinchGuide = interaction.handedness === 'Left'
+          ? hit.inLeftPinchGuide
+          : interaction.handedness === 'Right'
+            ? hit.inRightPinchGuide
+            : hit.inLeftPinchGuide || hit.inRightPinchGuide;
+        if (!inAssignedPinchGuide) {
+          pinchEnteredAt = 0;
+          if (pinching) {
+            pinching = false;
+            report('hand-detected');
+          } else {
+            report('hand-detected');
+          }
+        } else {
+          lastPinchWasLeft = interaction.leftHand;
+          if (!pinchEnteredAt) pinchEnteredAt = now;
+          if (!pinching && now - pinchEnteredAt >= PINCH_MIN_DURATION_MS) {
+            pinching = true;
+            report('pinching');
+          }
+        }
       } else if (!hit.inHeadGuide) {
         // A hand outside the blue head guide remains visible but cannot carry
         // over a partially completed stroke into the head area.
         resetGesture('hand-detected');
       } else {
         const handPoint = lastHandPoint;
+        if (pinching) {
+          pinching = false;
+          pinchEnteredAt = 0;
+          // Do not let motion made while pinching count as a petting stroke.
+          enteredAt = 0;
+          strokeStartX = null;
+          lastObservedX = null;
+          firstStrokeDirection = 0;
+          completedReverseStroke = false;
+          report('hand-detected');
+        }
+        pinchEnteredAt = 0;
         if (!enteredAt) {
           enteredAt = now;
           lastMovementAt = now;
@@ -172,6 +229,7 @@ export function createHealingFeature(emitResult: (result: HealingResult) => void
     },
     stop(): void {
       reactions.detach();
+      cheekPinch.detach();
       generation++;
       if (animationFrame !== null) cancelAnimationFrame(animationFrame);
       animationFrame = null;

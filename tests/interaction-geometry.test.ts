@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   cameraGuideRect,
+  cheekPinchGuideRect,
   headGuideRect,
   isNormalizedPointVisible,
   keepPointInsideRect,
@@ -44,4 +45,16 @@ test('손 좌표는 분홍 박스 안에 유지되고 중앙 상단 파란 박�
   });
   assert.equal(isNormalizedPointVisible(sourcePoint), true);
   assert.equal(isNormalizedPointVisible({ x: 1.01, y: 0.5 }), false);
+});
+
+test('꼬집기 영역은 오른쪽 볼과 오른쪽 여백을 포함하는 정사각형이다', () => {
+  const camera = { left: 28, top: 24, width: 253, height: 148 };
+  const left = cheekPinchGuideRect(camera, 'left');
+  const right = cheekPinchGuideRect(camera, 'right');
+  assert.equal(left.width, left.height);
+  assert.deepEqual(left, { ...right, left: camera.left * 2 + camera.width - right.left - right.width });
+  assert.ok(right.left > camera.left + camera.width / 2);
+  assert.ok(right.left + right.width < camera.left + camera.width);
+  assert.ok(right.top > camera.top);
+  assert.ok(right.top + right.height < camera.top + camera.height);
 });

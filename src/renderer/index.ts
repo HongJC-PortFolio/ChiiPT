@@ -26,6 +26,7 @@ function healingStatus(): string {
   switch (character.healing.state) {
     case 'hand-detected': return '손 감지됨';
     case 'petting': return '쓰다듬기 감지!';
+    case 'pinching': return '볼 꼬집기 감지!';
     case 'error': return `손동작 인식 오류: ${character.healing.message ?? '초기화 실패'}`;
     default: return '손동작 대기 중';
   }

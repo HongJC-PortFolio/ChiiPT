@@ -1,7 +1,8 @@
 import { FilesetResolver, HandLandmarker } from '@mediapipe/tasks-vision';
 
 export type HandLandmark = { x: number; y: number; z: number };
-export type DetectedHand = { landmarks: HandLandmark[]; score: number };
+export type Handedness = 'Left' | 'Right' | 'Unknown';
+export type DetectedHand = { landmarks: HandLandmark[]; score: number; handedness: Handedness };
 
 /**
  * Lazy, renderer-only wrapper around MediaPipe Hand Landmarker.
@@ -38,10 +39,15 @@ export class HandLandmarkerService {
     if (!this.landmarker || video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA || video.currentTime === this.lastVideoTime) return null;
     this.lastVideoTime = video.currentTime;
     const result = this.landmarker.detectForVideo(video, timestampMs);
-    return result.landmarks.map((landmarks, index) => ({
-      landmarks,
-      score: result.handednesses[index]?.[0]?.score ?? 0
-    })).filter(hand => hand.landmarks.length >= 9 && hand.score >= 0.45);
+    return result.landmarks.map((landmarks, index) => {
+      const label = result.handednesses[index]?.[0]?.categoryName;
+      const handedness: Handedness = label === 'Left' || label === 'Right' ? label : 'Unknown';
+      return {
+        landmarks,
+        score: result.handednesses[index]?.[0]?.score ?? 0,
+        handedness
+      };
+    }).filter(hand => hand.landmarks.length >= 18 && hand.score >= 0.45);
   }
 
   close(): void {

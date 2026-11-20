@@ -18,6 +18,8 @@ export interface Viewport {
 
 const GUIDE_MARGIN = 16;
 const HEAD = { width: 0.5, height: 0.45 };
+// 오른쪽 볼과 바로 옆 여백만 포함하는 임시 꼬집기 영역.
+const PINCH_GUIDE = { sideByHeight: 0.56, leftByWidth: 0.52, topByHeight: 0.14 };
 // idle-open-frame-01.png is a 256 × 240 canvas. These are the measured bounds
 // of its non-transparent character pixels, not the transparent PNG padding.
 const IDLE_ART = { left: 62 / 256, top: 78 / 240, width: 131 / 256, height: 150 / 240 };
@@ -72,6 +74,19 @@ export function headGuideRect(camera: Rect): Rect {
     top: camera.top,
     width,
     height
+  };
+}
+
+/** Green square used only for the cheek-pinch interaction. */
+export function cheekPinchGuideRect(camera: Rect, placement: 'left' | 'right'): Rect {
+  const length = Math.min(camera.height * PINCH_GUIDE.sideByHeight, camera.width * 0.44);
+  return {
+    left: placement === 'left'
+      ? camera.left + camera.width * (1 - PINCH_GUIDE.leftByWidth) - length
+      : camera.left + camera.width * PINCH_GUIDE.leftByWidth,
+    top: camera.top + camera.height * PINCH_GUIDE.topByHeight,
+    width: length,
+    height: length
   };
 }
 
