@@ -15,6 +15,7 @@ const runtime = new AppRuntime(camera, character, [
   })
 ]);
 const pet = document.querySelector<HTMLButtonElement>('#character')!;
+const characterFrame = document.querySelector<HTMLImageElement>('#character-frame')!;
 const status = document.querySelector<HTMLParagraphElement>('#status')!;
 let devices: CameraDevice[] = [];
 let deviceError = '';
@@ -33,7 +34,12 @@ function healingStatus(): string {
 function render(): void {
   pet.dataset.state = character.state;
   pet.dataset.healing = character.healing.state;
-  pet.textContent = character.state === 'Sleep' ? '－ᴗ－' : '●ᴗ●';
+  // 산책 중에는 WalkFeature가 별도 PNG 프레임을 올린다. 그 외 상태는
+  // 기본 캐릭터 PNG를 버튼 안에 유지해 임시 원형이 나타나지 않게 한다.
+  const animation = character.state === 'Sleep' ? 'sleep' : 'idle-open';
+  const frame = character.state === 'Sleep' ? 1 : 1;
+  const src = new URL(`assets/characters/${animation}/${animation}-frame-${String(frame).padStart(2, '0')}.png`, document.baseURI).href;
+  if (characterFrame.src !== src) characterFrame.src = src;
   status.textContent = `${character.state} · 카메라 ${camera.state.status} · ${healingStatus()}${camera.state.error ? ` · ${camera.state.error}` : ''}${deviceError ? ` · ${deviceError}` : ''}`;
   window.chiipt.publish({ character: character.state, camera: camera.state, selectedDeviceId: runtime.selectedDeviceId, devices });
 }
