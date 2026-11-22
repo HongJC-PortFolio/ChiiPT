@@ -26,9 +26,20 @@ export class PettingOverlay {
   private readonly cameraGuide = this.makeGuide('camera-guide');
   private readonly headGuide = this.makeGuide('head-guide');
   private readonly handCursor = this.makeGuide('hand-cursor');
+  private readonly pettingImage = document.createElement('img');
+  private readonly pinchIcon = document.createElement('img');
+  private readonly leftPinchUrl = new URL('/assets/characters/왼쪽볼당기기.png', window.location.href).href;
+  private readonly rightPinchUrl = new URL('/assets/characters/오른쪽볼당기기.png', window.location.href).href;
 
   constructor() {
-    this.handCursor.textContent = '🖐️';
+    this.pettingImage.src = new URL('/assets/characters/쓰담쓰담용.png', window.location.href).href;
+    this.pettingImage.alt = '';
+    this.pettingImage.draggable = false;
+    this.pinchIcon.src = this.rightPinchUrl;
+    this.pinchIcon.alt = '';
+    this.pinchIcon.draggable = false;
+    this.pinchIcon.hidden = true;
+    this.handCursor.append(this.pettingImage, this.pinchIcon);
     this.handCursor.setAttribute('aria-label', '인식된 손 위치');
     this.handCursor.setAttribute('role', 'img');
     document.body.append(this.cameraGuide, this.headGuide, this.handCursor);
@@ -56,8 +67,12 @@ export class PettingOverlay {
       return { inCameraGuide: false, inHeadGuide: false, inLeftPinchGuide: false, inRightPinchGuide: false };
     }
 
-    this.handCursor.textContent = pinching ? '🤌' : '🖐️';
-    this.handCursor.style.transform = `translate(-50%, -50%)${pinching ? (leftHand ? ' scaleX(-1) rotate(-90deg)' : ' rotate(-90deg)') : ''}`;
+    this.pettingImage.hidden = pinching;
+    this.pinchIcon.hidden = !pinching;
+    const pinchUrl = leftHand ? this.leftPinchUrl : this.rightPinchUrl;
+    if (pinching && this.pinchIcon.src !== pinchUrl) this.pinchIcon.src = pinchUrl;
+    // The supplied left/right PNGs already have their intended orientation.
+    this.handCursor.style.transform = 'translate(-50%, -50%)';
     const screenPoint = mapHandToCameraGuide(hand, camera);
     const cursorPoint = keepPointInsideRect(screenPoint, camera, 28);
     this.handCursor.style.left = `${cursorPoint.x}px`;
